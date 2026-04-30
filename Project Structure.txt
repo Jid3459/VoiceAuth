@@ -1,0 +1,92 @@
+voice-auth-ordering/
+│
+├── README.md
+├── .gitignore
+│
+├── backend/
+│   ├── .env
+│   ├── requirements.txt
+│   │
+│   ├── pretrained_models/              # Auto-created by SpeechBrain
+│   │   └── spkrec-ecapa-voxceleb/
+│   │       └── [model files]
+│   │
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── models.py
+│   │   ├── schemas.py
+│   │   │
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── voice_auth.py
+│   │   │   ├── trust_scorer.py
+│   │   │   ├── product_analyzer.py
+│   │   │   └── authorization.py
+│   │   │
+│   │   └── routes/
+│   │       ├── __init__.py
+│   │       ├── auth.py
+│   │       └── orders.py
+│   │
+│   └── tests/                          # Optional test directory
+│       ├── __init__.py
+│       ├── test_voice_auth.py
+│       ├── test_trust_scorer.py
+│       └── test_authorization.py
+│
+├── frontend/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   ├── vite.config.ts
+│   ├── index.html
+│   │
+│   ├── public/
+│   │   └── favicon.ico
+│   │
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx
+│   │   ├── App.css
+│   │   ├── index.css
+│   │   ├── vite-env.d.ts
+│   │   │
+│   │   ├── types/
+│   │   │   ├── index.ts
+│   │   │   └── api.types.ts
+│   │   │
+│   │   ├── services/
+│   │   │   └── api.ts
+│   │   │
+│   │   ├── components/
+│   │   │   ├── VoiceRecorder.tsx
+│   │   │   ├── VoiceEnrollment.tsx
+│   │   │   ├── OrderForm.tsx
+│   │   │   ├── TrustScoreDisplay.tsx
+│   │   │   ├── AuthLogs.tsx
+│   │   │   └── OrderHistory.tsx
+│   │   │
+│   │   ├── styles/
+│   │   │   ├── App.css
+│   │   │   ├── VoiceRecorder.css
+│   │   │   ├── VoiceEnrollment.css
+│   │   │   ├── OrderForm.css
+│   │   │   ├── TrustScoreDisplay.css
+│   │   │   ├── AuthLogs.css
+│   │   │   └── OrderHistory.css
+│   │   │
+│   │   └── utils/
+│   │       ├── audioUtils.ts
+│   │       └── formatters.ts
+│   │
+│   └── node_modules/                   # Created after npm install
+│
+└── docs/                               # Documentation
+    ├── API.md
+    ├── SETUP.md
+    ├── ARCHITECTURE.md
+    └── SECURITY.md

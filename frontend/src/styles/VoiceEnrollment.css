@@ -1,0 +1,250 @@
+.voice-enrollment-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 600px;
+}
+
+.enrollment-card {
+  background: white;
+  border-radius: var(--radius-2xl);
+  padding: var(--spacing-2xl);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--gray-200);
+  max-width: 600px;
+  width: 100%;
+}
+
+.enrollment-header {
+  text-align: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.enrollment-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--spacing-lg);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.enrollment-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: var(--spacing-sm);
+}
+
+.enrollment-header p {
+  color: var(--gray-600);
+  font-size: 15px;
+}
+
+.enrollment-progress {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-2xl);
+  position: relative;
+}
+
+.enrollment-progress::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--gray-200);
+  z-index: 0;
+}
+
+.progress-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  position: relative;
+  z-index: 1;
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  color: var(--gray-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all var(--transition-base);
+}
+
+.progress-step.active .step-number {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+  transform: scale(1.1);
+}
+
+.progress-step.completed .step-number {
+  background: var(--success);
+  color: white;
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gray-600);
+  text-align: center;
+}
+
+.progress-step.active .step-label {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.step-info {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.step-info h3 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: var(--spacing-lg);
+}
+
+.instruction-box {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.instruction-box svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.instruction-box p {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin: 0;
+}
+
+.duration-info {
+  color: var(--gray-600);
+  font-size: 14px;
+}
+
+.recorder-section {
+  margin: var(--spacing-xl) 0;
+}
+
+.enrollment-tips {
+  background: var(--gray-50);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.enrollment-tips h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin-bottom: var(--spacing-md);
+}
+
+.enrollment-tips ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.enrollment-tips li {
+  font-size: 14px;
+  color: var(--gray-700);
+  padding-left: var(--spacing-lg);
+  position: relative;
+}
+
+.enrollment-tips li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--success);
+  font-weight: 700;
+}
+
+.processing-state {
+  text-align: center;
+  padding: var(--spacing-2xl) 0;
+}
+
+.processing-spinner {
+  color: var(--primary);
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--spacing-lg);
+}
+
+.processing-state h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: var(--spacing-sm);
+}
+
+.processing-state p {
+  color: var(--gray-600);
+  font-size: 15px;
+}
+
+.security-info {
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid var(--gray-200);
+}
+
+.security-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.security-badge svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .enrollment-card {
+    padding: var(--spacing-xl);
+  }
+
+  .progress-step {
+    flex-direction: column;
+  }
+
+  .step-label {
+    font-size: 11px;
+  }
+}
