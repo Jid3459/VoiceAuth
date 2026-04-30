@@ -1,0 +1,39 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+
+# Secrets
+backend/.env
+backend/- Copy.env
+.env.example
+
+# Local SQLite database (contains user data + voice embeddings)
+backend/voice_auth.db
+backend/voice_auth.db-shm
+backend/voice_auth.db-wal
+
+# SpeechBrain downloaded model (~80 MB, auto-downloads on first run)
+backend/pretrained_models/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Logs
+*.log
+backend/logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# OS
+Thumbs.db
+Optional: also add a .env.example (copy of .env with placeholder values) so colla
