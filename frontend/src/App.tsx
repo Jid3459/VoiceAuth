@@ -11,10 +11,12 @@ import {
   History, 
   Lock,
   Settings,
-  Crown
+  Crown,
+  Users
 } from 'lucide-react';
 
 import VoiceEnrollment from './components/VoiceEnrollment';
+import VoiceProfileManager from './components/VoiceProfileManager';
 import OrderForm from './components/OrderForm';
 import OrderHistory from './components/OrderHistory';
 import AuthLogs from './components/AuthLogs';
@@ -24,7 +26,7 @@ import { authAPI } from './services/api';
 import { User as UserType } from './types';
 import './App.css';
 
-type TabType = 'order' | 'history' | 'logs';
+type TabType = 'order' | 'history' | 'logs' | 'voices';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
@@ -373,6 +375,14 @@ function App() {
             </button>
 
             <button
+              className={`nav-item ${activeTab === 'voices' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('voices'); setShowAdmin(false); }}
+            >
+              <Users size={20} />
+              <span>Voice Profiles</span>
+            </button>
+
+            <button
               className={`nav-item ${activeTab === 'logs' ? 'active' : ''}`}
               onClick={() => { setActiveTab('logs'); setShowAdmin(false); }}
             >
@@ -465,6 +475,7 @@ function App() {
               >
                 {activeTab === 'order' && <OrderForm userId={currentUser.id} />}
                 {activeTab === 'history' && <OrderHistory userId={currentUser.id} />}
+                {activeTab === 'voices' && <VoiceProfileManager userId={currentUser.id} />}
                 {activeTab === 'logs' && <AuthLogs userId={currentUser.id} />}
               </motion.div>
             )}

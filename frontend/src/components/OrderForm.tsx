@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingBag, Mic, Search, DollarSign, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -17,6 +17,62 @@ const OrderForm: React.FC<OrderFormProps> = ({ userId }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<OrderResponse | null>(null);
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
+
+  // Hook into the browser Web Speech API so the user doesn't have to type
+  // their order. While the microphone is recording for voice authentication,
+  // we run speech recognition in parallel and use the transcript as the query.
+  useEffect(() => {
+    const SpeechRecognition: any =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('Web Speech API not supported in this browser; query field stays manual.');
+      return;
+    }
+
+    if (isRecording) {
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-IN';
+      rec.onresult = (event: any) => {
+        let finalText = '';
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalText += t + ' ';
+          else interim += t;
+        }
+        if (finalText) {
+          transcriptRef.current = (transcriptRef.current + ' ' + finalText).trim();
+        }
+        const display = (transcriptRef.current + ' ' + interim).trim();
+        setLiveTranscript(display);
+        setQuery(display);
+      };
+      rec.onerror = (e: any) => console.warn('SpeechRecognition error', e?.error);
+      try {
+        transcriptRef.current = '';
+        setLiveTranscript('');
+        rec.start();
+        recognitionRef.current = rec;
+      } catch (e) {
+        console.warn('Could not start SpeechRecognition', e);
+      }
+    } else if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+        recognitionRef.current = null;
+      }
+    };
+  }, [isRecording]);
 
   const suggestedProducts = [
     "iPhone 15 Pro",
@@ -27,8 +83,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ userId }) => {
   ];
 
   const handleRecordingComplete = async (audioBlob: Blob) => {
-    if (!query.trim()) {
-      toast.error('Please enter a product query first');
+    // Prefer the typed query; otherwise use what the browser transcribed
+    // while the user was speaking. If neither is available, ask the user.
+    const effectiveQuery = (query.trim() || transcriptRef.current.trim());
+    if (!effectiveQuery) {
+      toast.error('Speak your order or type it before recording');
       return;
     }
 
@@ -36,7 +95,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ userId }) => {
     setResult(null);
 
     try {
-      const response = await orderAPI.processOrder(userId, query, audioBlob);
+      const response = await orderAPI.processOrder(userId, effectiveQuery, audioBlob);
       setResult(response);
 
       if (response.decision === 'ALLOW') {
@@ -76,7 +135,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ userId }) => {
 
         {/* Product Query Input */}
         <div className="query-section">
-          <label>What would you like to order?</label>
+          <label>What would you like to order? <span style={{ color: '#888', fontWeight: 400 }}>(optional — you can just speak your order while recording)</span></label>
           <div className="search-input-wrapper">
             <Search size={20} className="search-icon" />
             <input
@@ -122,8 +181,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ userId }) => {
             <h3>Voice Authentication Required</h3>
           </div>
           <p className="section-description">
-            Record your voice to verify your identity and complete the order
+            Record your voice to verify your identity and complete the order.
+            Just speak your order — we'll transcribe it automatically.
           </p>
+          {isRecording && liveTranscript && (
+            <div style={{
+              background: '#f4f7ff', border: '1px solid #cdd6f4', padding: '8px 12px',
+              borderRadius: 6, marginBottom: 8, fontStyle: 'italic', color: '#444'
+            }}>
+              🎙️ Heard: "{liveTranscript}"
+            </div>
+          )}
           <VoiceRecorder
             onRecordingComplete={handleRecordingComplete}
             isRecording={isRecording}

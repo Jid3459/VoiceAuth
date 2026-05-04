@@ -64,23 +64,31 @@ class TrustScorerService:
         return scores
 
     def _calculate_voice_biometrics(self, similarity: float) -> int:
-        """Deterministic piecewise-linear mapping of cosine similarity to 0..100."""
+        """
+        Deterministic piecewise-linear mapping of cosine similarity to 0..100.
+
+        Calibrated for browser-recorded audio (webm via MediaRecorder), where
+        the same speaker on different sessions / mic positions typically lands
+        at cosine similarity 0.45-0.75 -- not the 0.7-0.9 you would see in a
+        studio. The curve gives generous credit in the 0.40-0.60 band so a
+        legitimate user is not penalised for ambient noise.
+        """
         s = max(0.0, min(1.0, similarity))
-        # Below 0.30 cosine sim → near zero; above 0.95 → 100
-        if s < 0.30:
-            score = (s / 0.30) * 15.0
-        elif s < 0.50:
-            score = 15.0 + (s - 0.30) / 0.20 * 25.0      # 15 → 40
-        elif s < 0.65:
-            score = 40.0 + (s - 0.50) / 0.15 * 20.0      # 40 → 60
-        elif s < 0.75:
-            score = 60.0 + (s - 0.65) / 0.10 * 18.0      # 60 → 78
+        # Below 0.25 cosine sim → near zero (imposters cluster here);
+        # 0.45-0.70 is the honest browser-webm same-speaker band, so the
+        # curve climbs steeply through it; above 0.85 → ~100.
+        if s < 0.25:
+            score = (s / 0.25) * 15.0
+        elif s < 0.40:
+            score = 15.0 + (s - 0.25) / 0.15 * 25.0      # 15 → 40
+        elif s < 0.55:
+            score = 40.0 + (s - 0.40) / 0.15 * 25.0      # 40 → 65
+        elif s < 0.70:
+            score = 65.0 + (s - 0.55) / 0.15 * 20.0      # 65 → 85
         elif s < 0.85:
-            score = 78.0 + (s - 0.75) / 0.10 * 12.0      # 78 → 90
-        elif s < 0.95:
-            score = 90.0 + (s - 0.85) / 0.10 * 8.0       # 90 → 98
+            score = 85.0 + (s - 0.70) / 0.15 * 12.0      # 85 → 97
         else:
-            score = 100.0
+            score = 97.0 + (s - 0.85) / 0.15 * 3.0       # 97 → 100
         return _clamp(int(round(score)))
 
     def _calculate_speech_consistency(self, similarity: float, user_id: int, db: Session) -> int:

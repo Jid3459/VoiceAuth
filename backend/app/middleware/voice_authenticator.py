@@ -52,16 +52,21 @@ class VoiceAuthResult:
     user_agent: str
     gate_decision: str = "ALLOW"   # ALLOW or DENY from the voice-auth gate
     gate_reason: str = ""           # human-readable reason
+    matched_sample: str | None = None  # which enrolled sample (name) matched best
 
 
 # Default per-task thresholds. These can be overridden per-route by passing
 # `default_threshold` to VoiceAuthGuard, or further restricted by the
 # amount-based authorization service after the gate has approved entry.
 TASK_THRESHOLDS: Dict[str, int] = {
-    "low": 50,         # browse / read-only queries, low-stakes orders
-    "medium": 70,      # mid-value purchases, account changes
-    "high": 85,        # high-value purchases, sensitive operations
-    "critical": 92,    # password change, transfer, admin actions
+    # Calibrated for browser-recorded audio. Honest same-speaker clips via
+    # MediaRecorder land at cosine similarity ~0.55-0.70, which the trust
+    # curve maps to ~60-75 overall. Imposters cluster well below 30, so
+    # these floors keep the security gap while letting real users through.
+    "low": 45,         # browse / read-only queries, low-stakes orders
+    "medium": 60,      # mid-value purchases, account changes
+    "high": 78,        # high-value purchases, sensitive operations
+    "critical": 88,    # password change, transfer, admin actions
 }
 
 
@@ -140,8 +145,15 @@ class VoiceAuthGuard:
             logger.error(f"Embedding extraction failed for user {user_id}: {e}")
             raise HTTPException(status_code=400, detail="Could not process audio") from e
 
-        enrolled_embedding = voice_auth_service.string_to_embedding(user.voice_embedding)
-        similarity = voice_auth_service.compute_similarity(enrolled_embedding, current_embedding)
+        # Multi-sample enrollment: compare against every stored sample and
+        # take the best match. Returns which named sample matched, useful for
+        # family accounts where samples are labeled "Mom", "Dad", etc.
+        enrolled_samples = voice_auth_service.string_to_samples(user.voice_embedding or "")
+        if not enrolled_samples:
+            raise HTTPException(status_code=400, detail="User has no enrolled voice samples")
+        similarity, matched_sample = voice_auth_service.compute_max_similarity_with_match(
+            current_embedding, enrolled_samples
+        )
 
         # 4. Run the 5 layers and aggregate
         trust_scores = trust_scorer_service.calculate_trust_scores(
@@ -160,9 +172,10 @@ class VoiceAuthGuard:
         # result so the route handler (and the UI) always see the layer
         # scores and the explanation, even when access is denied.
         gate_decision = "ALLOW"
+        match_phrase = f" — matched profile '{matched_sample}'" if matched_sample else ""
         gate_reason = (
             f"Voice gate cleared (similarity={similarity:.2f}, "
-            f"trust={overall}/100 >= threshold {threshold})."
+            f"trust={overall}/100 >= threshold {threshold}){match_phrase}."
         )
 
         weak_floor = authorization_service.similarity_threshold_weak
@@ -202,6 +215,7 @@ class VoiceAuthGuard:
             user_agent=user_agent,
             gate_decision=gate_decision,
             gate_reason=gate_reason,
+            matched_sample=matched_sample,
         )
 
 

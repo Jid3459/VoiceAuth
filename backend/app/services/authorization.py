@@ -15,10 +15,15 @@ class AuthorizationService:
         self.trust_score_medium = 70
         self.trust_score_high = 85
         
-        # Backwards-compatible alias for the "weak" similarity floor
-        self.similarity_threshold = 0.50
-        self.similarity_threshold_weak = 0.50
-        self.similarity_threshold_strong = 0.75
+        # Backwards-compatible alias for the "weak" similarity floor.
+        # Calibrated for browser-recorded audio (webm/opus via MediaRecorder):
+        # legitimate same-speaker cosine similarity routinely lands in 0.45-0.75
+        # because of mic differences, AGC, and ambient noise. A 0.50 floor
+        # rejects honest users; 0.40 is permissive enough to let them through
+        # while still catching obvious imposters (which sit near 0.0-0.25).
+        self.similarity_threshold = 0.40
+        self.similarity_threshold_weak = 0.40
+        self.similarity_threshold_strong = 0.65
 
         logger.info("Authorization Service initialized with default thresholds")
     

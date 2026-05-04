@@ -11,10 +11,19 @@ import shutil
 
 class VoiceAuthService:
     def __init__(self):
-        # Load SpeechBrain ECAPA-TDNN model
+        # Anchor the model dir to this file's location so it works regardless
+        # of the process cwd. A relative path here is fragile: if uvicorn is
+        # launched from a different directory SpeechBrain silently re-creates
+        # the cache, which can produce a slightly different embedding than
+        # what was used at enrollment.
+        model_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "pretrained_models",
+            "spkrec-ecapa-voxceleb",
+        )
         self.model = EncoderClassifier.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb",
-            savedir="pretrained_models/spkrec-ecapa-voxceleb"
+            savedir=model_dir,
         )
     
     def _resolve_ffmpeg(self) -> str:
@@ -72,6 +81,57 @@ class VoiceAuthService:
             print(f"Audio conversion error: {e}")
             return False
     
+    def _trim_silence(
+        self,
+        signal: torch.Tensor,
+        sr: int = 16000,
+        frame_ms: int = 30,
+        threshold_db: float = -40.0,
+    ) -> torch.Tensor:
+        """Energy-based trim of leading/trailing silence. signal shape: [1, T].
+
+        Browser webm recordings always contain ~100-500 ms of silence at
+        each end (between clicking record/stop and actually speaking). On a
+        2-3 s clip that silence dominates the embedding and tanks same-speaker
+        similarity, so trim it before feeding ECAPA.
+        """
+        if signal.numel() == 0:
+            return signal
+        frame_len = int(sr * frame_ms / 1000)
+        if frame_len <= 0 or signal.shape[1] < frame_len * 3:
+            return signal
+        x = signal[0]
+        n_frames = x.shape[0] // frame_len
+        frames = x[: n_frames * frame_len].reshape(n_frames, frame_len)
+        rms = torch.sqrt(torch.mean(frames ** 2, dim=1) + 1e-12)
+        peak = torch.max(rms).item()
+        if peak <= 0:
+            return signal
+        threshold = peak * (10 ** (threshold_db / 20.0))
+        voiced_idx = torch.nonzero(rms > threshold).flatten()
+        if voiced_idx.numel() == 0:
+            return signal
+        start = int(voiced_idx[0].item()) * frame_len
+        end = (int(voiced_idx[-1].item()) + 1) * frame_len
+        trimmed = signal[:, start:end]
+        # Safety: if trimming left less than 0.5 s, fall back to original.
+        if trimmed.shape[1] < int(sr * 0.5):
+            return signal
+        return trimmed
+
+    def _normalize_rms(self, signal: torch.Tensor, target_rms: float = 0.1) -> torch.Tensor:
+        """Scale signal to a fixed RMS so browser auto-gain differences between
+        enrollment and verification don't shift the embedding."""
+        rms = torch.sqrt(torch.mean(signal ** 2) + 1e-12).item()
+        if rms < 1e-6:
+            return signal
+        scaled = signal * (target_rms / rms)
+        # Prevent clipping if a recording happens to be very quiet
+        peak = torch.max(torch.abs(scaled)).item()
+        if peak > 0.99:
+            scaled = scaled * (0.99 / peak)
+        return scaled
+
     def extract_embedding(self, audio_data: bytes) -> np.ndarray:
         """Extract voice embedding from audio bytes"""
         # Determine file extension based on audio data
@@ -112,12 +172,26 @@ class VoiceAuthService:
             if sr != 16000:
                 resampler = torchaudio.transforms.Resample(sr, 16000)
                 signal = resampler(signal)
-            
+
+            # Symmetric preprocessing: silence trim + amplitude normalize.
+            # Without this, same-speaker scores drop sharply because the
+            # embedding is dominated by leading/trailing silence in browser
+            # recordings and by inconsistent input gain.
+            signal = self._trim_silence(signal, 16000)
+            signal = self._normalize_rms(signal)
+
             # Extract embedding
             with torch.no_grad():
                 embedding = self.model.encode_batch(signal)
                 embedding = embedding.squeeze().cpu().numpy()
-            
+
+            # L2-normalize so the stored vector is on the unit sphere — makes
+            # cosine similarity invariant to any incidental scaling the model
+            # may apply, and keeps comparisons stable across versions.
+            norm = float(np.linalg.norm(embedding))
+            if norm > 1e-12:
+                embedding = embedding / norm
+
             return embedding
         
         except Exception as e:
@@ -181,12 +255,111 @@ class VoiceAuthService:
                     pass
 
     def embedding_to_string(self, embedding: np.ndarray) -> str:
-        """Convert numpy array to comma-separated string for DB storage"""
+        """Convert numpy array to comma-separated string for DB storage (legacy single-embedding format)."""
         return ','.join(map(str, embedding.tolist()))
-    
+
     def string_to_embedding(self, embedding_str: str) -> np.ndarray:
-        """Convert comma-separated string back to numpy array"""
+        """Convert comma-separated string back to numpy array (legacy single-embedding format)."""
         return np.array([float(x) for x in embedding_str.split(',')])
+
+    # ----- Multi-sample enrollment helpers -----
+    # The User.voice_embedding text column stores a JSON list of "samples".
+    # Each sample is a dict with id, name, created_at, and the embedding
+    # vector. This lets a single user account hold multiple labeled voice
+    # profiles — useful for both robustness (re-record yourself in different
+    # mic conditions) and family accounts (multiple speakers per household).
+    #
+    # Two legacy formats are still readable for backwards compatibility:
+    #   * a comma-separated single embedding (oldest)
+    #   * a JSON list of plain arrays (intermediate, before sample metadata)
+
+    def samples_to_string(self, samples) -> str:
+        """Encode a list of sample-dicts as JSON for DB storage."""
+        import json
+        out = []
+        for s in samples:
+            out.append({
+                "id": s["id"],
+                "name": s.get("name") or "Sample",
+                "created_at": s.get("created_at") or "",
+                "embedding": s["embedding"].tolist() if hasattr(s["embedding"], "tolist") else list(s["embedding"]),
+            })
+        return json.dumps(out)
+
+    def string_to_samples(self, stored: str):
+        """Decode the stored samples blob into a list of sample-dicts.
+
+        Returns [] for empty input. Handles both the new dict-of-metadata
+        format and the two legacy formats (single comma-sep vector, or JSON
+        list of plain arrays); legacy entries are auto-named "Sample 1", etc.
+        """
+        import json
+        import uuid
+        if not stored:
+            return []
+        stored = stored.strip()
+        if not stored.startswith('['):
+            # Legacy: single comma-separated vector
+            arr = np.array([float(x) for x in stored.split(',')])
+            return [{
+                "id": str(uuid.uuid4()),
+                "name": "Sample 1",
+                "created_at": "",
+                "embedding": arr,
+            }]
+        data = json.loads(stored)
+        samples = []
+        for i, item in enumerate(data):
+            if isinstance(item, list):
+                # Legacy: JSON list of plain arrays
+                samples.append({
+                    "id": str(uuid.uuid4()),
+                    "name": f"Sample {i + 1}",
+                    "created_at": "",
+                    "embedding": np.array(item),
+                })
+            else:
+                samples.append({
+                    "id": item.get("id") or str(uuid.uuid4()),
+                    "name": item.get("name") or f"Sample {i + 1}",
+                    "created_at": item.get("created_at") or "",
+                    "embedding": np.array(item["embedding"]),
+                })
+        return samples
+
+    def compute_max_similarity_with_match(self, live: np.ndarray, samples):
+        """Return (best_similarity, matched_sample_name) across all samples."""
+        if not samples:
+            return 0.0, None
+        best_sim = -1.0
+        best_name = None
+        for s in samples:
+            sim = self.compute_similarity(live, s["embedding"])
+            if sim > best_sim:
+                best_sim = sim
+                best_name = s.get("name")
+        return float(best_sim), best_name
+
+    # --- Backwards-compatible thin wrappers used elsewhere in the codebase ---
+
+    def embeddings_to_string(self, embeddings) -> str:
+        """Legacy: list-of-arrays writer. Wraps each as an unnamed sample."""
+        import uuid
+        samples = [
+            {"id": str(uuid.uuid4()), "name": f"Sample {i + 1}", "created_at": "", "embedding": e}
+            for i, e in enumerate(embeddings)
+        ]
+        return self.samples_to_string(samples)
+
+    def string_to_embeddings(self, stored: str):
+        """Legacy: returns just the embedding arrays without metadata."""
+        return [s["embedding"] for s in self.string_to_samples(stored)]
+
+    def compute_max_similarity(self, live: np.ndarray, enrolled_list) -> float:
+        """Legacy: returns just the best similarity number."""
+        if not enrolled_list:
+            return 0.0
+        return max(self.compute_similarity(live, e) for e in enrolled_list)
 
 # Singleton instance
 voice_auth_service = VoiceAuthService()

@@ -46,23 +46,25 @@ const VoiceEnrollment: React.FC<VoiceEnrollmentProps> = ({
       setRecordingStep(recordingStep + 1);
       toast.success(`Recording ${recordingStep + 1} completed!`);
     } else {
-      // All recordings complete, enroll voice
-      await enrollVoice(newRecordings[0]); // Using first recording for enrollment
+      // All recordings complete: send EVERY sample to the backend so the
+      // user's voice profile is built from multiple recordings, not just one.
+      await enrollAllSamples(newRecordings);
     }
   };
 
-  const enrollVoice = async (audioBlob: Blob) => {
+  const enrollAllSamples = async (samples: Blob[]) => {
     setIsProcessing(true);
     try {
-      await authAPI.enrollVoice(userId, audioBlob);
-      toast.success('🎉 Voice enrolled successfully!');
-      setTimeout(() => {
-        onEnrollmentComplete();
-      }, 1500);
+      let lastResponse: any = null;
+      for (let i = 0; i < samples.length; i++) {
+        lastResponse = await authAPI.enrollVoice(userId, samples[i]);
+        toast.info(`Sample ${i + 1}/${samples.length} stored (total on profile: ${lastResponse?.total_samples ?? '?'})`);
+      }
+      toast.success(`🎉 Voice enrolled with ${samples.length} samples!`);
+      setTimeout(() => onEnrollmentComplete(), 1200);
     } catch (error: any) {
       console.error('Enrollment error:', error);
       toast.error(error.response?.data?.detail || 'Enrollment failed. Please try again.');
-      // Reset on error
       setRecordings([]);
       setRecordingStep(0);
     } finally {

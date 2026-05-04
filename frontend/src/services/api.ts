@@ -46,13 +46,36 @@ export const authAPI = {
     return response.data;
   },
 
-  enrollVoice: async (userId: number, audioBlob: Blob) => {
+  enrollVoice: async (userId: number, audioBlob: Blob, sampleName?: string) => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'voice.wav');
-    
+    if (sampleName && sampleName.trim()) {
+      formData.append('sample_name', sampleName.trim());
+    }
+
     const response = await api.post(`/auth/enroll-voice/${userId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data as { sample_name: string; total_samples: number; embedding_dimension: number };
+  },
+
+  listEnrollments: async (userId: number) => {
+    const response = await api.get(`/auth/enrollments/${userId}`);
+    return response.data as {
+      user_id: number;
+      is_voice_enrolled: boolean;
+      total_samples: number;
+      samples: { id: string; name: string; created_at: string }[];
+    };
+  },
+
+  deleteEnrollmentSample: async (userId: number, sampleId: string) => {
+    const response = await api.delete(`/auth/enrollments/${userId}/${sampleId}`);
+    return response.data as { remaining_samples: number };
+  },
+
+  clearEnrollments: async (userId: number) => {
+    const response = await api.delete(`/auth/enrollments/${userId}`);
     return response.data;
   },
 
