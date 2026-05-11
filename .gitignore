@@ -5,7 +5,7 @@ backend/**/__pycache__/
 backend/*.pyc
 backend/.pytest_cache/
 backend/.mypy_cache/
-
+.claude
 # Secrets
 backend/.env
 backend/- Copy.env
